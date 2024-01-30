@@ -1,7 +1,7 @@
 /**
- * ©2023 NodeMedia
+ * ©2024 NodeMedia
  * <p>
- * Copyright © 2015 - 2023 NodeMedia.All Rights Reserved.
+ * Copyright © 2015 - 2024 NodeMedia.All Rights Reserved.
  */
 
 package cn.nodemedia;
@@ -15,16 +15,23 @@ import android.view.Surface;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+
 import androidx.annotation.NonNull;
 import androidx.camera.core.Camera;
-import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.FocusMeteringAction;
+import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.Preview;
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
+
 import com.google.common.util.concurrent.ListenableFuture;
+
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
@@ -63,6 +70,21 @@ public class NodePublisher {
 
     public static final int EffectorTextureTypeT2D = 0;
     public static final int EffectorTextureTypeEOS = 1;
+
+    /**
+     * 自动对焦
+     */
+    public static final int FLAG_AF = 1;
+
+    /**
+     * 自动曝光
+     */
+    public static final int FLAG_AE = 1 << 1;
+
+    /**
+     * 自动白平衡
+     */
+    public static final int FLAG_AWB = 1 << 2;
 
 
     private static final String TAG = "NodeMedia.java";
@@ -158,8 +180,65 @@ public class NodePublisher {
         return mCamera;
     }
 
-    public CameraInfo getCameraInfo() {
-        return mCamera.getCameraInfo();
+    public float getMinZoomRatio() {
+        if (mCamera != null && mCamera.getCameraInfo().getZoomState().getValue() != null) {
+            return mCamera.getCameraInfo().getZoomState().getValue().getMinZoomRatio();
+        }
+        return 1.0f;
+    }
+
+    public float getMaxZoomRatio() {
+        if (mCamera != null && mCamera.getCameraInfo().getZoomState().getValue() != null) {
+            return mCamera.getCameraInfo().getZoomState().getValue().getMaxZoomRatio();
+        }
+        return 1.0f;
+    }
+
+    public float getZoomRatio() {
+        if (mCamera != null && mCamera.getCameraInfo().getZoomState().getValue() != null) {
+            return mCamera.getCameraInfo().getZoomState().getValue().getZoomRatio();
+        }
+        return 1.0f;
+    }
+
+    public float getLinearZoom() {
+        if (mCamera != null && mCamera.getCameraInfo().getZoomState().getValue() != null) {
+            return mCamera.getCameraInfo().getZoomState().getValue().getLinearZoom();
+        }
+        return 0.0f;
+    }
+
+    public void setRoomRatio(float ratio) {
+        if (mCamera != null) {
+            mCamera.getCameraControl().setZoomRatio(ratio);
+        }
+    }
+
+    public void setLinearZoom(float zoom) {
+        if (mCamera != null) {
+            mCamera.getCameraControl().setLinearZoom(zoom);
+        }
+    }
+
+    public void enableTorch(boolean enable) {
+        if (mCamera != null) {
+            mCamera.getCameraControl().enableTorch(enable);
+        }
+    }
+
+    public void startFocusAndMeteringCenter() {
+        startFocusAndMetering(1f, 1f, .5f, .5f, FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE | FocusMeteringAction.FLAG_AWB);
+    }
+
+    public void startFocusAndMetering(float w, float h, float x, float y, int mod) {
+        if (mCamera == null || glpv == null) {
+            return;
+        }
+        MeteringPoint point = new SurfaceOrientedMeteringPointFactory(w, h).createPoint(x, y);
+        FocusMeteringAction action = new FocusMeteringAction.Builder(point, mod)
+                .setAutoCancelDuration(2, TimeUnit.SECONDS)
+                .build();
+        mCamera.getCameraControl().startFocusAndMetering(action);
     }
 
     private void bindImageAnalysis(@NonNull ProcessCameraProvider cameraProvider, boolean front) {
@@ -170,7 +249,7 @@ public class NodePublisher {
                 .setTargetRotation(videoOrientation)
                 .build();
         preview.setSurfaceProvider(this.glpv.getSurfaceProvider());
-        mCamera = cameraProvider.bindToLifecycle((LifecycleOwner) this.ctx, cameraSelector  , preview);
+        mCamera = cameraProvider.bindToLifecycle((LifecycleOwner) this.ctx, cameraSelector, preview);
     }
 
     private void onEvent(int event, String msg) {
@@ -234,6 +313,7 @@ public class NodePublisher {
 
     /**
      * 设置是否使用enhanced-rtmp 标准推流
+     *
      * @param enhancedRtmp
      */
     public native void setEnhancedRtmp(boolean enhancedRtmp);
@@ -243,6 +323,7 @@ public class NodePublisher {
      * 0.0 最小值 麦克风静音
      * 1.0 默认值 原始音量
      * 2.0 最大值 增益音量
+     *
      * @param volume 0.0 ~~ 2.0
      */
     public native void setVolume(float volume);
@@ -273,7 +354,7 @@ public class NodePublisher {
         }
         WindowManager wm = (WindowManager) this.ctx.getSystemService(Context.WINDOW_SERVICE);
         int surfaceRotation = wm.getDefaultDisplay().getRotation();
-        int sensorRotationDegrees = getCameraInfo().getSensorRotationDegrees(this.videoOrientation);
+        int sensorRotationDegrees = mCamera.getCameraInfo().getSensorRotationDegrees(this.videoOrientation);
         GPUImageChange(this.surfaceWidth, this.surfaceHeight, this.cameraWidth, this.cameraHeight, surfaceRotation, sensorRotationDegrees, this.isOpenFrontCamera);
     }
 

@@ -1,7 +1,7 @@
 /**
- * ©2023 NodeMedia.cn
+ * ©2024 NodeMedia.cn
  * <p>
- * Copyright © 2015 - 2023 NodeMedia.cn All Rights Reserved.
+ * Copyright © 2015 - 2024 NodeMedia.cn All Rights Reserved.
  */
 
 package cn.nodemedia;
