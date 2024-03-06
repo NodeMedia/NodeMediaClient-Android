@@ -243,12 +243,15 @@ public class NodePublisher {
 
     private void bindImageAnalysis(@NonNull ProcessCameraProvider cameraProvider, boolean front) {
         CameraSelector cameraSelector = front ? CameraSelector.DEFAULT_FRONT_CAMERA : CameraSelector.DEFAULT_BACK_CAMERA;
-
+        Preview.SurfaceProvider provider = this.glpv.getSurfaceProvider();
+        if(provider == null) {
+            return;
+        }
         Preview preview = new Preview.Builder()
                 .setTargetResolution(new Size(videoWidth, videoHeight))
                 .setTargetRotation(videoOrientation)
                 .build();
-        preview.setSurfaceProvider(this.glpv.getSurfaceProvider());
+        preview.setSurfaceProvider(provider);
         mCamera = cameraProvider.bindToLifecycle((LifecycleOwner) this.ctx, cameraSelector, preview);
     }
 
@@ -375,6 +378,9 @@ public class NodePublisher {
         }
 
         private Preview.SurfaceProvider getSurfaceProvider() {
+            if(surfaceTexture == null) {
+                return null;
+            }
             return request -> {
                 Size resolution = request.getResolution();
                 surfaceTexture.setDefaultBufferSize(resolution.getWidth(), resolution.getHeight());
