@@ -172,6 +172,7 @@ public class NodePublisher {
     public void closeCamera() {
         if (isCameraOpened && camera2Manager != null) {
             camera2Manager.closeCamera();
+            isCameraOpened = false;
         }
     }
 
