@@ -19,11 +19,12 @@ A simple, high-performance, low-latency live streaming SDK.
 * RTMP/RTSP/HLS/HTTP/KMP/UDP protocols
 * FLV/MPEGTS muxers
 * H264/H265 video encoders 
-* AAC audio encoder
+* AAC/OPUS/G711 audio encoder
 * Hardware Acceleration
 * Arbitrary video resolution
 * Multiple output
 * Compatible with flv_extension_id and Enhanced-Rtmp standards
+* Build-in color filters and skin smoothing filter
 
 ## Install
 ### 1. Add the JitPack repository to your build file
