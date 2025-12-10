@@ -42,7 +42,7 @@ dependencyResolutionManagement {
 ### 2. Add the dependency
 ```
 dependencies {
-    implementation 'com.github.NodeMedia:NodeMediaClient-Android:4.0.4'
+    implementation 'com.github.NodeMedia:NodeMediaClient-Android:4.0.5'
 }
 ```
 
