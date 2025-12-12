@@ -24,6 +24,8 @@ A simple, high-performance, low-latency live streaming SDK.
 * Arbitrary video resolution
 * Multiple output
 * Compatible with flv_extension_id and Enhanced-Rtmp standards
+* Network congestion packet loss strategy
+* Network quality event callback
 * Build-in color filters and skin smoothing filter
 
 ## Install
@@ -42,7 +44,7 @@ dependencyResolutionManagement {
 ### 2. Add the dependency
 ```
 dependencies {
-    implementation 'com.github.NodeMedia:NodeMediaClient-Android:4.0.7'
+    implementation 'com.github.NodeMedia:NodeMediaClient-Android:4.0.8'
 }
 ```
 
