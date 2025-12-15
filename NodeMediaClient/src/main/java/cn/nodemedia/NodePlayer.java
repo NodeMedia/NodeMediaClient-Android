@@ -238,10 +238,6 @@ public class NodePlayer implements TextureView.SurfaceTextureListener {
      */
     public native void setVideoSurface(Surface surface);
 
-    public native void setRTMPPageUrl(String rtmpPageUrl);
-
-    public native void setRTMPSwfUrl(String rtmpSwfUrl);
-
     /**
      * 设置RTSP的传输协议， 默认是UDP
      * @param rtspTransport
