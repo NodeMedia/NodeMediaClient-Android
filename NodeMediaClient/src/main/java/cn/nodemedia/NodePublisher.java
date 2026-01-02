@@ -204,35 +204,17 @@ public class NodePublisher {
         }
         return 1.0f;
     }
-
-    public float getLinearZoom() {
-        if (camera2Manager != null) {
-            return camera2Manager.getLinearZoom();
-        }
-        return 0.0f;
-    }
-
     public void setRoomRatio(float ratio) {
         if (camera2Manager != null) {
             camera2Manager.setZoomRatio(ratio);
         }
     }
-
-    public void setLinearZoom(float zoom) {
-        if (camera2Manager != null) {
-            camera2Manager.setLinearZoom(zoom);
-        }
-    }
-
     public void enableTorch(boolean enable) {
         if (camera2Manager != null) {
             camera2Manager.enableTorch(enable);
         }
     }
 
-    /**
-     * 检查是否支持闪光灯
-     */
     public boolean isFlashAvailable() {
         if (camera2Manager != null) {
             return camera2Manager.isFlashAvailable();
@@ -286,7 +268,7 @@ public class NodePublisher {
 
     public native void setCryptoKey(String cryptoKey);
 
-    native void setVolume(float volume);
+    public native void setVolume(float volume);
 
     public native void setEffectParameter(String parameter, float value);
 

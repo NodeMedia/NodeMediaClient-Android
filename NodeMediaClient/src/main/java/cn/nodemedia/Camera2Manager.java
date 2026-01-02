@@ -344,32 +344,6 @@ public class Camera2Manager {
     }
 
     /**
-     * 获取当前线性变焦值 (0.0 - 1.0)
-     */
-    public float getLinearZoom() {
-        float minZoom = getMinZoomRatio();
-        float maxZoom = getMaxZoomRatio();
-        return (currentZoomRatio - minZoom) / (maxZoom - minZoom);
-    }
-
-    /**
-     * 设置线性变焦值 (0.0 - 1.0)
-     */
-    public void setLinearZoom(float zoom) {
-        if (zoom < 0.0f) {
-            zoom = 0.0f;
-        } else if (zoom > 1.0f) {
-            zoom = 1.0f;
-        }
-
-        float minZoom = getMinZoomRatio();
-        float maxZoom = getMaxZoomRatio();
-        float targetRatio = minZoom + zoom * (maxZoom - minZoom);
-
-        setZoomRatio(targetRatio);
-    }
-
-    /**
      * 检查是否支持闪光灯
      */
     public boolean isFlashAvailable() {
