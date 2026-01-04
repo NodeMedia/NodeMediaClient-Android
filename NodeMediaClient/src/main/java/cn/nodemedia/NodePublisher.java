@@ -136,6 +136,12 @@ public class NodePublisher {
         });
     }
 
+    @Override
+    protected void finalize() throws Throwable {
+        jniFree();
+        super.finalize();
+    }
+
     public void setOnNodePublisherEventListener(OnNodePublisherEventListener onNodePublisherEventListener) {
         this.onNodePublisherEventListener = onNodePublisherEventListener;
     }
@@ -184,42 +190,15 @@ public class NodePublisher {
         }
     }
 
-    public float getMinZoomRatio() {
-        if (camera2Manager != null) {
-            return camera2Manager.getMinZoomRatio();
-        }
-        return 1.0f;
-    }
-
-    public float getMaxZoomRatio() {
-        if (camera2Manager != null) {
-            return camera2Manager.getMaxZoomRatio();
-        }
-        return 1.0f;
-    }
-
-    public float getZoomRatio() {
-        if (camera2Manager != null) {
-            return camera2Manager.getZoomRatio();
-        }
-        return 1.0f;
-    }
-    public void setRoomRatio(float ratio) {
+    public void setZoomRatio(float ratio) {
         if (camera2Manager != null) {
             camera2Manager.setZoomRatio(ratio);
         }
     }
-    public void enableTorch(boolean enable) {
+    public void setTorchEnable(boolean enable) {
         if (camera2Manager != null) {
             camera2Manager.enableTorch(enable);
         }
-    }
-
-    public boolean isFlashAvailable() {
-        if (camera2Manager != null) {
-            return camera2Manager.isFlashAvailable();
-        }
-        return false;
     }
 
     public void startFocusAndMeteringCenter() {
@@ -234,18 +213,11 @@ public class NodePublisher {
         }
     }
 
-
     private void onEvent(int event, String msg) {
 //        Log.d(TAG, "on Event: " + event + " Message:" + msg);
         if (this.onNodePublisherEventListener != null) {
             this.onNodePublisherEventListener.onEventCallback(this, event, msg);
         }
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
-        jniFree();
-        super.finalize();
     }
 
     private native long jniInit(Context context, String license);

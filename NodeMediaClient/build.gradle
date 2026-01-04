@@ -8,8 +8,8 @@ android {
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion 33
-        versionCode 40013
-        versionName "4.0.13"
+        versionCode 40100
+        versionName "4.1.0"
     }
 
     buildTypes {
@@ -33,7 +33,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.NodeMedia'
                 artifactId = 'NodeMediaClient-Android'
-                version = '4.0.13'
+                version = '4.1.0'
             }
         }
     }

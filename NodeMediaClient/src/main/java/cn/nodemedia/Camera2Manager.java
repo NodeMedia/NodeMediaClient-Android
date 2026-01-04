@@ -6,7 +6,6 @@
 
 package cn.nodemedia;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
@@ -17,13 +16,18 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.MeteringRectangle;
+import android.hardware.camera2.params.OutputConfiguration;
+import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Executors;
 
 public class Camera2Manager {
     private static final String TAG = "Camera2Manager";
@@ -35,12 +39,10 @@ public class Camera2Manager {
     private HandlerThread backgroundThread;
     private Handler backgroundHandler;
 
-    private String cameraId;
     private SurfaceTexture surfaceTexture;
     private Size previewSize;
     private CameraCharacteristics cameraCharacteristics;
     private float currentZoomRatio = 1.0f;
-    private boolean isTorchOn = false;
 
     public interface CameraStateListener {
         void onCameraOpened();
@@ -59,7 +61,6 @@ public class Camera2Manager {
         this.stateListener = listener;
     }
 
-    @SuppressLint("MissingPermission")
     public void openCamera(int facingId, SurfaceTexture surfaceTexture, int width, int height) {
         this.surfaceTexture = surfaceTexture;
 
@@ -87,7 +88,7 @@ public class Camera2Manager {
                 surfaceTexture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
             }
 
-            cameraManager.openCamera(cameraId, stateCallback, backgroundHandler);
+            cameraManager.openCamera(cameraId, deviceStateCallback, backgroundHandler);
 
         } catch (CameraAccessException e) {
             Log.e(TAG, "无法访问摄像头: " + e.getMessage());
@@ -112,10 +113,6 @@ public class Camera2Manager {
         }
 
         stopBackgroundThread();
-    }
-
-    public boolean isFrontCamera() {
-        return true;
     }
 
     public Size getPreviewSize() {
@@ -191,9 +188,22 @@ public class Camera2Manager {
 
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             previewRequestBuilder.addTarget(surface);
-
-            cameraDevice.createCaptureSession(Arrays.asList(surface), sessionStateCallback, backgroundHandler);
-
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // 使用 SessionConfiguration
+                ArrayList<OutputConfiguration> outputConfigurations = new ArrayList<>();
+                OutputConfiguration configuration = new OutputConfiguration(surface);
+                outputConfigurations.add(configuration);
+                SessionConfiguration sessionConfig = new SessionConfiguration(
+                        SessionConfiguration.SESSION_REGULAR, // 或 SESSION_HIGH_SPEED 等
+                        outputConfigurations,
+                        Executors.newCachedThreadPool(), // Executor（用于回调）
+                        sessionStateCallback
+                );
+                cameraDevice.createCaptureSession(sessionConfig);
+            } else {
+                // 使用旧方法（带 Handler）
+                cameraDevice.createCaptureSession(List.of(surface), sessionStateCallback, backgroundHandler);
+            }
         } catch (CameraAccessException e) {
             Log.e(TAG, "创建预览会话失败: " + e.getMessage());
             if (stateListener != null) {
@@ -218,16 +228,16 @@ public class Camera2Manager {
         }
     }
 
-    private final CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
+    private final CameraDevice.StateCallback deviceStateCallback = new CameraDevice.StateCallback() {
         @Override
-        public void onOpened(@SuppressLint("InvalidAccessToGuardedMember") CameraDevice camera) {
+        public void onOpened(CameraDevice camera) {
             Log.d(TAG, "摄像头已打开");
             cameraDevice = camera;
             createCameraPreviewSession();
         }
 
         @Override
-        public void onDisconnected(@SuppressLint("InvalidAccessToGuardedMember") CameraDevice camera) {
+        public void onDisconnected(CameraDevice camera) {
             Log.d(TAG, "摄像头已断开连接");
             camera.close();
             cameraDevice = null;
@@ -237,7 +247,7 @@ public class Camera2Manager {
         }
 
         @Override
-        public void onError(@SuppressLint("InvalidAccessToGuardedMember") CameraDevice camera, int error) {
+        public void onError(CameraDevice camera, int error) {
             Log.e(TAG, "摄像头错误: " + error);
             camera.close();
             cameraDevice = null;
@@ -249,7 +259,7 @@ public class Camera2Manager {
 
     private final CameraCaptureSession.StateCallback sessionStateCallback = new CameraCaptureSession.StateCallback() {
         @Override
-        public void onConfigured(@SuppressLint("InvalidAccessToGuardedMember") CameraCaptureSession session) {
+        public void onConfigured(CameraCaptureSession session) {
             Log.d(TAG, "摄像头会话已配置");
             captureSession = session;
             startPreview();
@@ -259,7 +269,7 @@ public class Camera2Manager {
         }
 
         @Override
-        public void onConfigureFailed(@SuppressLint("InvalidAccessToGuardedMember") CameraCaptureSession session) {
+        public void onConfigureFailed(CameraCaptureSession session) {
             Log.e(TAG, "摄像头会话配置失败");
             if (stateListener != null) {
                 stateListener.onCameraError("摄像头会话配置失败");
@@ -296,16 +306,29 @@ public class Camera2Manager {
     }
 
     /**
-     * 获取当前变焦比例
+     * 获取当前变焦比例（绝对值）
      */
     public float getZoomRatio() {
         return currentZoomRatio;
     }
 
     /**
-     * 设置变焦比例
+     * 获取当前归一化变焦值 (0.0-1.0)
      */
-    public void setZoomRatio(float ratio) {
+    public float getNormalizedZoom() {
+        float maxZoom = getMaxZoomRatio();
+        float minZoom = getMinZoomRatio();
+        if (maxZoom <= minZoom) {
+            return 0.0f;
+        }
+        return (currentZoomRatio - minZoom) / (maxZoom - minZoom);
+    }
+
+    /**
+     * 设置归一化变焦值
+     * @param normalizedRatio 归一化值，0.0 对应 minZoom，1.0 对应 maxZoom
+     */
+    public void setZoomRatio(float normalizedRatio) {
         if (cameraCharacteristics == null || previewRequestBuilder == null) {
             return;
         }
@@ -313,13 +336,15 @@ public class Camera2Manager {
         float maxZoom = getMaxZoomRatio();
         float minZoom = getMinZoomRatio();
 
-        if (ratio < minZoom) {
-            ratio = minZoom;
-        } else if (ratio > maxZoom) {
-            ratio = maxZoom;
+        // 限制归一化值在 0.0-1.0 范围内
+        if (normalizedRatio < 0.0f) {
+            normalizedRatio = 0.0f;
+        } else if (normalizedRatio > 1.0f) {
+            normalizedRatio = 1.0f;
         }
 
-        currentZoomRatio = ratio;
+        // 将归一化值转换为实际的变焦比例
+        currentZoomRatio = minZoom + normalizedRatio * (maxZoom - minZoom);
 
         try {
             // 计算变焦区域
@@ -369,14 +394,17 @@ public class Camera2Manager {
             return;
         }
 
-        isTorchOn = enable;
         Log.d(TAG, "设置闪光灯: " + (enable ? "开启" : "关闭"));
 
         try {
             // 设置闪光灯模式
             if (enable) {
+                // 开启 TORCH 时需要将 AE_MODE 设置为 ON，避免 AUTO_FLASH 覆盖 TORCH 设置
+                previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
                 previewRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
             } else {
+                // 关闭 TORCH 时恢复 AUTO_FLASH 模式
+                previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
                 previewRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
             }
 

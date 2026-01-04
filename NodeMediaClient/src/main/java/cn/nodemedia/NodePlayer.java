@@ -14,7 +14,6 @@ import android.view.TextureView;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
-
 public class NodePlayer implements TextureView.SurfaceTextureListener {
     static {
         System.loadLibrary("NodeMediaClient");
