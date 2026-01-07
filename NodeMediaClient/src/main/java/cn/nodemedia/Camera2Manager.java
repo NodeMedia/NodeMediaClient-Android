@@ -46,7 +46,9 @@ public class Camera2Manager {
 
     public interface CameraStateListener {
         void onCameraOpened();
+
         void onCameraClosed();
+
         void onCameraError(String error);
     }
 
@@ -90,7 +92,7 @@ public class Camera2Manager {
 
             cameraManager.openCamera(cameraId, deviceStateCallback, backgroundHandler);
 
-        } catch (CameraAccessException e) {
+        } catch (Exception e) {
             Log.e(TAG, "无法访问摄像头: " + e.getMessage());
             if (stateListener != null) {
                 stateListener.onCameraError("无法访问摄像头: " + e.getMessage());
@@ -133,7 +135,7 @@ public class Camera2Manager {
                     return id;
                 }
             }
-        } catch (CameraAccessException e) {
+        } catch (Exception e) {
             Log.e(TAG, "获取摄像头ID失败: " + e.getMessage());
         }
         return null;
@@ -176,13 +178,16 @@ public class Camera2Manager {
                 backgroundThread.join();
                 backgroundThread = null;
                 backgroundHandler = null;
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 Log.e(TAG, "停止后台线程失败: " + e.getMessage());
             }
         }
     }
 
     private void createCameraPreviewSession() {
+        if (cameraDevice == null) {
+            return;
+        }
         try {
             Surface surface = new Surface(surfaceTexture);
 
@@ -204,7 +209,7 @@ public class Camera2Manager {
                 // 使用旧方法（带 Handler）
                 cameraDevice.createCaptureSession(List.of(surface), sessionStateCallback, backgroundHandler);
             }
-        } catch (CameraAccessException e) {
+        } catch (Exception e) {
             Log.e(TAG, "创建预览会话失败: " + e.getMessage());
             if (stateListener != null) {
                 stateListener.onCameraError("创建预览会话失败: " + e.getMessage());
@@ -219,12 +224,12 @@ public class Camera2Manager {
 
         try {
             previewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-            previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
-
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler);
-
-        } catch (CameraAccessException e) {
+        } catch (Exception e) {
             Log.e(TAG, "开始预览失败: " + e.getMessage());
+            if (stateListener != null) {
+                stateListener.onCameraError("开始预览失败: " + e.getMessage());
+            }
         }
     }
 
@@ -326,6 +331,7 @@ public class Camera2Manager {
 
     /**
      * 设置归一化变焦值
+     *
      * @param normalizedRatio 归一化值，0.0 对应 minZoom，1.0 对应 maxZoom
      */
     public void setZoomRatio(float normalizedRatio) {
@@ -363,7 +369,7 @@ public class Camera2Manager {
                     captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler);
                 }
             }
-        } catch (CameraAccessException e) {
+        } catch (Exception e) {
             Log.e(TAG, "设置变焦失败: " + e.getMessage());
         }
     }
@@ -399,12 +405,8 @@ public class Camera2Manager {
         try {
             // 设置闪光灯模式
             if (enable) {
-                // 开启 TORCH 时需要将 AE_MODE 设置为 ON，避免 AUTO_FLASH 覆盖 TORCH 设置
-                previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
                 previewRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
             } else {
-                // 关闭 TORCH 时恢复 AUTO_FLASH 模式
-                previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
                 previewRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
             }
 
@@ -415,10 +417,8 @@ public class Camera2Manager {
             } else {
                 Log.w(TAG, "摄像头会话未建立，无法应用闪光灯设置");
             }
-        } catch (CameraAccessException e) {
-            Log.e(TAG, "设置闪光灯失败: " + e.getMessage());
         } catch (Exception e) {
-            Log.e(TAG, "设置闪光灯时发生未知错误: " + e.getMessage());
+            Log.e(TAG, "设置闪光灯时发生错误: " + e.getMessage());
         }
     }
 
@@ -435,16 +435,17 @@ public class Camera2Manager {
         float centerY = previewSize.getHeight() / 2.0f;
 
         startFocusAndMetering(centerX, centerY, 100.0f, 100.0f,
-            NodePublisher.FLAG_AF | NodePublisher.FLAG_AE | NodePublisher.FLAG_AWB);
+                NodePublisher.FLAG_AF | NodePublisher.FLAG_AE | NodePublisher.FLAG_AWB);
     }
 
     /**
      * 开始对焦和测光
-     * @param x 对焦点X坐标
-     * @param y 对焦点Y坐标
-     * @param width 对焦区域宽度
+     *
+     * @param x      对焦点X坐标
+     * @param y      对焦点Y坐标
+     * @param width  对焦区域宽度
      * @param height 对焦区域高度
-     * @param mode 对焦模式标志 (FLAG_AF, FLAG_AE, FLAG_AWB)
+     * @param mode   对焦模式标志 (FLAG_AF, FLAG_AE, FLAG_AWB)
      */
     public void startFocusAndMetering(float x, float y, float width, float height, int mode) {
         if (cameraCharacteristics == null || previewRequestBuilder == null || previewSize == null) {
@@ -461,7 +462,7 @@ public class Camera2Manager {
             boolean supportAF = false;
             for (int afMode : afModes) {
                 if (afMode == CaptureRequest.CONTROL_AF_MODE_AUTO ||
-                    afMode == CaptureRequest.CONTROL_AF_MODE_MACRO) {
+                        afMode == CaptureRequest.CONTROL_AF_MODE_MACRO) {
                     supportAF = true;
                     break;
                 }
@@ -527,7 +528,7 @@ public class Camera2Manager {
                 captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler);
             }
 
-        } catch (CameraAccessException e) {
+        } catch (Exception e) {
             Log.e(TAG, "设置对焦和测光失败: " + e.getMessage());
         }
     }

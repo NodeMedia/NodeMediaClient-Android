@@ -132,6 +132,9 @@ public class NodePublisher {
             @Override
             public void onCameraError(String error) {
                 Log.e(TAG, "Camera error: " + error);
+                if(onNodePublisherEventListener != null) {
+                    onNodePublisherEventListener.onEventCallback(NodePublisher.this, 2104, error);
+                }
             }
         });
     }
