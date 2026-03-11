@@ -44,7 +44,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.NodeMedia'
                 artifactId = 'NodeMediaClient-Android'
-                version = '4.1.5'
+                version = '4.1.6'
             }
         }
     }
