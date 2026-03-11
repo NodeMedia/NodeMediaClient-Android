@@ -12,11 +12,34 @@ import android.opengl.GLSurfaceView;
 import android.util.Log;
 import android.util.Size;
 import android.view.Gravity;
+import android.view.Surface;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.OptIn;
+import androidx.camera.camera2.interop.Camera2CameraInfo;
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraInfo;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.FocusMeteringAction;
+import androidx.camera.core.MeteringPoint;
+import androidx.camera.core.Preview;
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.core.content.ContextCompat;
+import androidx.lifecycle.LifecycleOwner;
+
+import com.google.common.util.concurrent.ListenableFuture;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
 
 public class NodePublisher {
     static {
@@ -84,11 +107,11 @@ public class NodePublisher {
     private static final String TAG = "NodeMedia.java";
     private OnNodePublisherEventListener onNodePublisherEventListener;
     private GLCameraView mGLCameraView;
-    private Camera2Manager camera2Manager;
     private int mCameraID = -1;
+    private Camera mCamera;
     private Context ctx;
     private long id;
-    private int videoOrientation = VIDEO_ORIENTATION_PORTRAIT;
+    private int videoOrientation = 0;
     private int videoWidth = 720; // jni层会修改这个值
     private int videoHeight = 1280; // jni层会修改这个值
     private int cameraWidth = 0;
@@ -105,38 +128,6 @@ public class NodePublisher {
     public NodePublisher(Context context, String license) {
         ctx = context;
         id = jniInit(context, license);
-        camera2Manager = new Camera2Manager(context);
-        camera2Manager.setCameraStateListener(new Camera2Manager.CameraStateListener() {
-            @Override
-            public void onCameraOpened() {
-                Log.d(TAG, "Camera opened successfully");
-                isCameraOpened = true;
-                Size previewSize = camera2Manager.getPreviewSize();
-                cameraWidth = previewSize.getWidth();
-                cameraHeight = previewSize.getHeight();
-                if (isScreenCreated) {
-                    boolean isFrontCamera = mCameraID == NMC_CAMERA_FRONT;
-                    int sensorOrientation = camera2Manager.getSensorOrientation();
-                    // 获取摄像头传感器方向并计算正确的旋转角度
-                    Log.d(TAG, "Camera Open - Sensor rotation degrees: " + sensorOrientation);
-                    GPUImageChange(surfaceWidth, surfaceHeight, cameraWidth, cameraHeight, videoOrientation, sensorOrientation, isFrontCamera);
-                }
-            }
-
-            @Override
-            public void onCameraClosed() {
-                Log.d(TAG, "Camera closed");
-                isCameraOpened = false;
-            }
-
-            @Override
-            public void onCameraError(String error) {
-                Log.e(TAG, "Camera error: " + error);
-                if(onNodePublisherEventListener != null) {
-                    onNodePublisherEventListener.onEventCallback(NodePublisher.this, 2104, error);
-                }
-            }
-        });
     }
 
     @Override
@@ -173,46 +164,79 @@ public class NodePublisher {
 
     public void openCamera(int cameraID) {
         mCameraID = cameraID;
-        if (!isCameraOpened && mGLCameraView != null && mGLCameraView.surfaceTexture != null) {
-            camera2Manager.openCamera(mCameraID, mGLCameraView.surfaceTexture, videoWidth, videoHeight);
+        if (isCameraOpened) {
+            return;
         }
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(ctx);
+        cameraProviderFuture.addListener(() -> {
+            try {
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+                CameraSelector cameraSelector = mCameraID == NMC_CAMERA_FRONT ? CameraSelector.DEFAULT_FRONT_CAMERA : CameraSelector.DEFAULT_BACK_CAMERA;
+                Preview.SurfaceProvider provider = this.mGLCameraView.getSurfaceProvider();
+                if (provider == null) {
+                    return;
+                }
+                int rotation = Surface.ROTATION_0;
+                if (videoOrientation == VIDEO_ORIENTATION_LANDSCAPE_RIGHT) {
+                    rotation = Surface.ROTATION_90;
+                } else if (videoOrientation == VIDEO_ORIENTATION_LANDSCAPE_LEFT) {
+                    rotation = Surface.ROTATION_270;
+                }
+                Preview preview = new Preview.Builder()
+                        .setTargetResolution(new Size(videoWidth, videoHeight))
+                        .setTargetRotation(rotation)
+                        .build();
+                preview.setSurfaceProvider(provider);
+                mCamera = cameraProvider.bindToLifecycle((LifecycleOwner) this.ctx, cameraSelector, preview);
+                isCameraOpened = true;
+            } catch (ExecutionException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        }, ContextCompat.getMainExecutor(this.ctx));
     }
 
     public void closeCamera() {
-        if (isCameraOpened && camera2Manager != null) {
-            camera2Manager.closeCamera();
-            isCameraOpened = false;
-        }
+        isCameraOpened = false;
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(ctx);
+        cameraProviderFuture.addListener(() -> {
+            try {
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+                cameraProvider.unbindAll();
+            } catch (ExecutionException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        }, ContextCompat.getMainExecutor(this.ctx));
     }
 
     public void switchCamera() {
-        if (camera2Manager != null) {
-            closeCamera();
-            mCameraID = mCameraID == NMC_CAMERA_FRONT ? NMC_CAMERA_BACK : NMC_CAMERA_FRONT;
-            openCamera(mCameraID);
-        }
+        mCameraID = mCameraID == NMC_CAMERA_FRONT ? NMC_CAMERA_BACK : NMC_CAMERA_FRONT;
+        closeCamera();
+        openCamera(mCameraID);
     }
 
     public void setZoomRatio(float ratio) {
-        if (camera2Manager != null) {
-            camera2Manager.setZoomRatio(ratio);
+        if (mCamera != null) {
+            mCamera.getCameraControl().setLinearZoom(ratio);
         }
     }
+
     public void setTorchEnable(boolean enable) {
-        if (camera2Manager != null) {
-            camera2Manager.enableTorch(enable);
+        if (mCamera != null) {
+            mCamera.getCameraControl().enableTorch(enable);
         }
     }
 
     public void startFocusAndMeteringCenter() {
-        if (camera2Manager != null) {
-            camera2Manager.startFocusAndMeteringCenter();
-        }
+        startFocusAndMetering(1f, 1f, .5f, .5f, FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE | FocusMeteringAction.FLAG_AWB);
     }
 
     public void startFocusAndMetering(float w, float h, float x, float y, int mod) {
-        if (camera2Manager != null) {
-            camera2Manager.startFocusAndMetering(x, y, w, h, mod);
+        if (mCamera != null) {
+            MeteringPoint point = new SurfaceOrientedMeteringPointFactory(w, h).createPoint(x, y);
+            FocusMeteringAction action = new FocusMeteringAction.Builder(point, mod)
+                    .setAutoCancelDuration(2, TimeUnit.SECONDS)
+                    .build();
+            mCamera.getCameraControl().startFocusAndMetering(action);
         }
     }
 
@@ -267,6 +291,26 @@ public class NodePublisher {
 
     private native int GPUImageDestroy();
 
+    private void onViewChange() {
+        if (this.cameraWidth == 0 || this.cameraHeight == 0 || this.surfaceWidth == 0 || this.surfaceHeight == 0) {
+            return;
+        }
+        int orientation;
+        switch (videoOrientation) {
+            case VIDEO_ORIENTATION_LANDSCAPE_LEFT:
+                orientation = Surface.ROTATION_270;
+                break;
+            case VIDEO_ORIENTATION_LANDSCAPE_RIGHT:
+                orientation = Surface.ROTATION_90;
+                break;
+            default:
+                orientation = Surface.ROTATION_0;
+                break;
+        }
+        int videoRotationDegrees = mCamera.getCameraInfo().getSensorRotationDegrees(orientation);
+        GPUImageChange(this.surfaceWidth, this.surfaceHeight, this.cameraWidth, this.cameraHeight, videoOrientation, videoRotationDegrees, this.mCameraID == NMC_CAMERA_FRONT);
+    }
+
     private class GLCameraView extends GLSurfaceView implements GLSurfaceView.Renderer {
         public SurfaceTexture surfaceTexture;
         private final float[] transformMatrix = new float[16];
@@ -278,6 +322,24 @@ public class NodePublisher {
             setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         }
 
+        private Preview.SurfaceProvider getSurfaceProvider() {
+            if (surfaceTexture == null) {
+                return null;
+            }
+            return request -> {
+                Size resolution = request.getResolution();
+                surfaceTexture.setDefaultBufferSize(resolution.getWidth(), resolution.getHeight());
+                request.provideSurface(new Surface(surfaceTexture), ContextCompat.getMainExecutor(ctx), result -> {
+                    result.getSurface().release();
+                });
+                this.queueEvent(() -> {
+                    cameraWidth = resolution.getWidth();
+                    cameraHeight = resolution.getHeight();
+                    onViewChange();
+                });
+            };
+        }
+
         @Override
         public void onSurfaceCreated(GL10 gl10, EGLConfig eglConfig) {
             Log.d(TAG, "on Surface Created");
@@ -285,9 +347,7 @@ public class NodePublisher {
             surfaceTexture = new SurfaceTexture(textureId);
             surfaceTexture.setOnFrameAvailableListener(surfaceTexture -> requestRender());
             isScreenCreated = true;
-            if (!isCameraOpened && mCameraID >= 0) {
-                camera2Manager.openCamera(mCameraID, surfaceTexture, videoWidth, videoHeight);
-            }
+            openCamera(mCameraID);
         }
 
         @Override
@@ -295,9 +355,7 @@ public class NodePublisher {
             Log.d(TAG, "on Surface Changed " + w + "x" + h);
             surfaceWidth = w;
             surfaceHeight = h;
-            boolean isFrontCamera = mCameraID == NMC_CAMERA_FRONT;
-            int sensorOrientation = camera2Manager.getSensorOrientation();
-            GPUImageChange(surfaceWidth, surfaceHeight, cameraWidth, cameraHeight, videoOrientation, sensorOrientation, isFrontCamera);
+            onViewChange();
         }
 
         @Override
