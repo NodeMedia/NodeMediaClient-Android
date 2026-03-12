@@ -167,6 +167,9 @@ public class NodePublisher {
         if (isCameraOpened) {
             return;
         }
+        if (this.mGLCameraView == null) {
+            return;
+        }
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(ctx);
         cameraProviderFuture.addListener(() -> {
             try {
@@ -189,8 +192,8 @@ public class NodePublisher {
                 preview.setSurfaceProvider(provider);
                 mCamera = cameraProvider.bindToLifecycle((LifecycleOwner) this.ctx, cameraSelector, preview);
                 isCameraOpened = true;
-            } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                Log.e(TAG, "Camera open failed", e);
             }
         }, ContextCompat.getMainExecutor(this.ctx));
     }
@@ -202,8 +205,8 @@ public class NodePublisher {
             try {
                 ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
                 cameraProvider.unbindAll();
-            } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                Log.e(TAG, "Camera close failed", e);
             }
         }, ContextCompat.getMainExecutor(this.ctx));
     }
