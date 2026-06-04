@@ -1,4 +1,4 @@
-# NodePlayer API 文档
+# Android NodePlayer API 文档
 
 NodeMediaClient Android 客户端核心播放器 API 参考文档  
 
