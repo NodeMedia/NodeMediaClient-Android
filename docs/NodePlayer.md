@@ -1,7 +1,6 @@
 # NodePlayer API 文档
 
-> NodeMedia Android 客户端核心播放器 API 参考文档  
-> © 2024 NodeMedia.cn
+NodeMediaClient Android 客户端核心播放器 API 参考文档  
 
 ---
 
